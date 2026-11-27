@@ -11,6 +11,7 @@ use App\Http\Resources\AccountResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Socialite\Facades\Socialite;
@@ -59,10 +60,19 @@ class AuthController extends Controller
         ]);
 
         try {
+            // Any app's Google token would otherwise sign in as its owner here: only accept ours.
+            $info = Http::timeout(5)->get('https://oauth2.googleapis.com/tokeninfo', ['access_token' => $data['access_token']]);
+            $clients = array_filter([config('services.google.client_id'), ...config('services.google.app_client_ids')]);
+            $issuedToUs = $info->ok() && array_intersect([$info->json('aud'), $info->json('azp')], $clients) !== [];
+
             /** @var AbstractProvider $driver */
             $driver = Socialite::driver('google');
-            $google = $driver->stateless()->userFromToken($data['access_token']);
+            $google = $issuedToUs ? $driver->stateless()->userFromToken($data['access_token']) : null;
         } catch (Throwable) {
+            $google = null;
+        }
+
+        if ($google === null) {
             throw ValidationException::withMessages(['access_token' => 'Google did not accept this sign-in. Please try again.']);
         }
 

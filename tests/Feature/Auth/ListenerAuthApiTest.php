@@ -4,12 +4,16 @@ use App\Enums\AdminRole;
 use App\Models\User;
 use App\Support\ReturnPath;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Http;
 use Laravel\Socialite\Contracts\Factory as Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
 use Laravel\Socialite\Two\User as GoogleUser;
 
-function fakeGoogle(string $id = 'g-123', string $email = 'rina@gmail.com', string $name = 'Rina'): void
+function fakeGoogle(string $id = 'g-123', string $email = 'rina@gmail.com', string $name = 'Rina', string $audience = 'oz-android'): void
 {
+    config(['services.google.app_client_ids' => ['oz-android']]);
+    Http::fake(['oauth2.googleapis.com/tokeninfo*' => Http::response(['aud' => $audience, 'azp' => $audience])]);
+
     $google = (new GoogleUser)->map([
         'id' => $id,
         'email' => $email,
@@ -105,6 +109,37 @@ describe('Google', function () {
 
         expect($existing->refresh()->google_id)->toBe('g-123')
             ->and(User::count())->toBe(1);
+    });
+
+    it('refuses a Google token issued to another app', function () {
+        User::factory()->create(['email' => 'rina@gmail.com']);
+        fakeGoogle(audience: 'someone-elses-app');
+
+        $this->postJson('/api/v1/auth/google', ['access_token' => 'ya29.x', 'device_name' => 'Pixel'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('access_token');
+    });
+
+    it('refuses a token Google does not recognise', function () {
+        config(['services.google.app_client_ids' => ['oz-android']]);
+        Http::fake(['oauth2.googleapis.com/tokeninfo*' => Http::response(['error' => 'invalid_token'], 400)]);
+
+        $this->postJson('/api/v1/auth/google', ['access_token' => 'bogus', 'device_name' => 'Pixel'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('access_token');
+    });
+
+    it('locks out whoever pre-registered an unverified account with the Google email', function () {
+        $squatter = User::factory()->unverified()->create(['email' => 'rina@gmail.com']);
+        $squatter->createToken('squatter-phone');
+        fakeGoogle();
+
+        $this->postJson('/api/v1/auth/google', ['access_token' => 'ya29.x', 'device_name' => 'Pixel'])->assertOk();
+
+        $squatter->refresh();
+        expect($squatter->password)->toBeNull()
+            ->and($squatter->email_verified_at)->not->toBeNull()
+            ->and($squatter->tokens()->pluck('name')->all())->toBe(['Pixel']);
     });
 
     it('refuses Google sign-in for staff accounts', function () {

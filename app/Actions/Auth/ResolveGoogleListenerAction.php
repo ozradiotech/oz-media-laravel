@@ -40,6 +40,13 @@ class ResolveGoogleListenerAction
             ]);
         }
 
+        // Nobody proved they own this email before: whoever set the password may not be
+        // the Google account's owner, so their password and app tokens stop working.
+        if ($user->exists && $user->email_verified_at === null) {
+            $user->forceFill(['password' => null, 'remember_token' => null]);
+            $user->tokens()->delete();
+        }
+
         $user->forceFill([
             'google_id' => $google->getId(),
             'avatar_url' => $user->avatar_url ?? $google->getAvatar(),

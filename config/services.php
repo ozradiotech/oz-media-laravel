@@ -40,6 +40,8 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+        // The mobile app's OAuth client ids (Android, iOS), comma separated: tokens from any other client are refused.
+        'app_client_ids' => array_values(array_filter(explode(',', (string) env('GOOGLE_APP_CLIENT_IDS', '')))),
     ],
 
 ];
