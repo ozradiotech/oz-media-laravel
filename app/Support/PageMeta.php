@@ -44,7 +44,7 @@ final class PageMeta implements Arrayable
     {
         return [
             'title' => $this->title,
-            'description' => $this->description ? Str::limit(trim(strip_tags($this->description)), 200) : null,
+            'description' => $this->description ? Str::limit(Str::squish(html_entity_decode(strip_tags(str_replace('<', ' <', $this->description)), ENT_QUOTES | ENT_HTML5)), 200) : null,
             'image' => $this->image,
             'type' => $this->type,
             'url' => $this->url ?? request()->url(),
