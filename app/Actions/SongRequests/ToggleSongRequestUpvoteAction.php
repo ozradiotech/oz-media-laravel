@@ -45,12 +45,16 @@ class ToggleSongRequestUpvoteAction
                 return false;
             }
 
-            DB::table('song_request_upvotes')->insertOrIgnore([
+            $inserted = DB::table('song_request_upvotes')->insertOrIgnore([
                 'user_id' => $user->id,
                 'song_request_id' => $request->id,
                 'created_at' => now(),
             ]);
-            $request->newQuery()->whereKey($request->id)->increment('upvotes_count');
+
+            // 0 means a simultaneous tap already added it: count it once.
+            if ($inserted > 0) {
+                $request->newQuery()->whereKey($request->id)->increment('upvotes_count');
+            }
 
             return true;
         });
