@@ -90,7 +90,7 @@ class AcquisitionMetrics
             $cohort = 0;
             $returned = 0;
 
-            foreach ($this->visitDays() as $days) {
+            foreach ($this->visitDays($today->subDays(60)) as $days) {
                 $first = $days[0];
 
                 if ($first->lessThan($today->subDays(60)) || $first->greaterThan($today->subDays($within))) {
@@ -128,7 +128,7 @@ class AcquisitionMetrics
             // [weeks ago => [visitor => [weeks ago active...]]]
             $cohorts = [];
 
-            foreach ($this->visitDays() as $visitor => $days) {
+            foreach ($this->visitDays($thisWeek->subWeeks($weeks - 1)) as $visitor => $days) {
                 $first = $weekIndex($days[0]);
 
                 if ($first >= $weeks) {
@@ -202,15 +202,19 @@ class AcquisitionMetrics
     }
 
     /**
-     * Every listener's listening days (WIB), oldest first, all stations and modes.
+     * Listening days (WIB), oldest first, all stations and modes, of the
+     * listeners whose first day is on or after $firstSince. The database does
+     * the filtering, so memory follows the window, not the whole retention.
      *
      * @return array<string, list<CarbonImmutable>>
      */
-    private function visitDays(): array
+    private function visitDays(CarbonImmutable $firstSince): array
     {
         $days = [];
+        $since = $firstSince->toDateString();
+        $newcomers = DB::table('audience_visitors')->select('visitor')->groupBy('visitor')->havingRaw('MIN(date) >= ?', [$since]);
 
-        foreach (DB::table('audience_visitors')->select('visitor', 'date')->distinct()->orderBy('date')->cursor() as $row) {
+        foreach (DB::table('audience_visitors')->select('visitor', 'date')->distinct()->whereIn('visitor', $newcomers)->orderBy('date')->cursor() as $row) {
             $days[(string) $row->visitor][] = CarbonImmutable::parse((string) $row->date, DashboardMetrics::TIMEZONE);
         }
 

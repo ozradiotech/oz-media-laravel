@@ -59,6 +59,9 @@ it('measures how many new listeners come back within 7 days', function () {
     visited('late', '2026-11-10');
     visited('late', '2026-11-20'); // Back, but after 7 days.
     visited('too-new', '2026-11-24'); // First seen under 7 days ago: not judged yet.
+    visited('regular', '2026-08-01'); // A long-time listener is not new, however recent.
+    visited('regular', '2026-11-10');
+    visited('regular', '2026-11-12');
 
     expect(app(AcquisitionMetrics::class)->returnRate(7))->toBe(['cohort' => 3, 'returned' => 1, 'rate' => 33.3]);
 });
@@ -70,6 +73,9 @@ it('follows each week\'s new listeners over the next weeks', function () {
     visited('a', '2026-11-17');
     // Week of Mon 16 Nov: one new listener.
     visited('c', '2026-11-16');
+    // First seen long before: in none of these cohorts.
+    visited('regular', '2026-09-01');
+    visited('regular', '2026-11-10');
 
     $cohorts = collect(app(AcquisitionMetrics::class)->weeklyCohorts(4))->keyBy('week');
 
